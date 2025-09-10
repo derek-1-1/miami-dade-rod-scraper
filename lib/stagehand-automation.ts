@@ -1,5 +1,5 @@
 import { Stagehand, Page } from "@browserbasehq/stagehand";
-import { S3Uploader } from "./s3-upload";
+import { S3Uploader } from "./s3-upload.js";  // ADD .js HERE
 
 export interface ScrapeConfig {
   daysBack: number;
