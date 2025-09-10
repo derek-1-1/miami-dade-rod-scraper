@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { ChathamRODScraper, ScrapeConfig } from "../lib/stagehand-automation";
+import { ChathamRODScraper, ScrapeConfig } from "../lib/stagehand-automation.js";  // ADD .js HERE
 import { z } from "zod";
+
+// REST OF YOUR CODE STAYS EXACTLY THE SAME - NO OTHER CHANGES
 
 // Request validation schema
 const RequestSchema = z.object({
