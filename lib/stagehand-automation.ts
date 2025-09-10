@@ -30,14 +30,14 @@ export class ChathamRODScraper {
         baseURL: "https://api.deepseek.com/v1",
       },
       browserbaseSessionCreateParams: {
-        projectId: process.env.BROWSERBASE_PROJECT_ID!,
-        region: "us-west-2",
-        browserSettings: {
-          viewport: { width: 1920, height: 1080 },
-          blockAds: true,
-        },
-        timeout: 300000, // 5 minutes
-      },
+  projectId: process.env.BROWSERBASE_PROJECT_ID!,
+  region: "us-west-2",
+  browserSettings: {
+    viewport: { width: 1920, height: 1080 },
+    blockAds: true,
+  },
+  timeout: 300, // 5 minutes (300 seconds)
+},
       verbose: 1,
       domSettleTimeoutMs: 45000,
     });
