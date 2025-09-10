@@ -10,6 +10,7 @@ export class ChathamRODScraper {
   private stagehand: Stagehand;
   private s3Uploader: S3Uploader;
   private config: ScrapeConfig;
+  private sessionInfo: any;
 
   constructor(config: ScrapeConfig) {
     this.config = {
@@ -54,9 +55,11 @@ export class ChathamRODScraper {
 
   async execute(): Promise<{ success: boolean; s3Path?: string; error?: string }> {
     try {
-      await this.stagehand.init();
-      console.log(`Session started: ${this.stagehand.sessionId}`);
-      console.log(`Debug URL: https://browserbase.com/sessions/${this.stagehand.sessionId}`);
+      // Initialize and capture session info
+      this.sessionInfo = await this.stagehand.init();
+      console.log(`Session started: ${this.sessionInfo.sessionId}`);
+      console.log(`Debug URL: ${this.sessionInfo.debugUrl}`);
+      console.log(`Session URL: ${this.sessionInfo.sessionUrl}`);
       
       const page = this.stagehand.page;
 
