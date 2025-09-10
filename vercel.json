@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/scrape.ts": {
+      "maxDuration": 300
+    }
+  },
+  "env": {
+    "BROWSERBASE_API_KEY": "@browserbase-api-key",
+    "BROWSERBASE_PROJECT_ID": "@browserbase-project-id",
+    "GOOGLE_API_KEY": "@google-api-key",
+    "AWS_ACCESS_KEY_ID": "@aws-access-key-id",
+    "AWS_SECRET_ACCESS_KEY": "@aws-secret-access-key",
+    "AWS_REGION": "@aws-region",
+    "S3_BUCKET_NAME": "@s3-bucket-name"
+  }
+}
