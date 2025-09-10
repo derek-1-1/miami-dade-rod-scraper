@@ -23,6 +23,7 @@ export class ChathamRODScraper {
       env: "BROWSERBASE",
       apiKey: process.env.BROWSERBASE_API_KEY!,
       projectId: process.env.BROWSERBASE_PROJECT_ID!,
+      disablePino: true,
       modelName: "deepseek/deepseek-chat",
       modelClientOptions: {
         apiKey: process.env.DEEPSEEK_API_KEY!,
