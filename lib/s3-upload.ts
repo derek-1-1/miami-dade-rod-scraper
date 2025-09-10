@@ -16,16 +16,30 @@ export class S3Uploader {
   }
 
   async uploadFile(fileBuffer: Buffer, fileName: string): Promise<string> {
-    const key = `chatham-rod/${new Date().toISOString().split("T")[0]}/${fileName}`;
+    const dateFolder = new Date().toISOString().split("T")[0];
+    const timestamp = Date.now();
+    const key = `chatham-rod/${dateFolder}/${timestamp}-${fileName}`;
+    
+    console.log(`Uploading to S3: ${key}`);
     
     const command = new PutObjectCommand({
       Bucket: this.bucketName,
       Key: key,
       Body: fileBuffer,
       ContentType: "application/pdf",
+      Metadata: {
+        source: "chatham-county-rod",
+        timestamp: new Date().toISOString(),
+      }
     });
 
-    await this.s3Client.send(command);
-    return `s3://${this.bucketName}/${key}`;
+    try {
+      await this.s3Client.send(command);
+      console.log(`Successfully uploaded to S3: ${key}`);
+      return `s3://${this.bucketName}/${key}`;
+    } catch (error) {
+      console.error("S3 upload error:", error);
+      throw new Error(`Failed to upload to S3: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 }
