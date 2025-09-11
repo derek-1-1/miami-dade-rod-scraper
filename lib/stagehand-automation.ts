@@ -57,192 +57,130 @@ export class ChathamRODScraper {
 
   async execute(): Promise<{ success: boolean; s3Path?: string; error?: string }> {
     try {
+      // Initialize Stagehand session
       this.sessionInfo = await this.stagehand.init();
       console.log(`Session started: ${this.sessionInfo.sessionId}`);
       console.log(`Debug URL: ${this.sessionInfo.debugUrl}`);
+      console.log(`Session URL: ${this.sessionInfo.sessionUrl}`);
       
+      // Get the page from Stagehand (it's a Playwright Page object)
       const page = this.stagehand.page;
 
-      // Step 1: Navigate
+      // Step 1: Navigate to website
       console.log("Step 1: Navigating to Chatham County ROD...");
       await page.goto("https://www.chathamncrod.org/", {
         waitUntil: "networkidle",
         timeout: 60000,
       });
-      await page.waitForTimeout(3000);
+      await page.waitForTimeout(2000);
 
-      // Step 2: Acknowledge Disclaimer (Keep Stagehand - this works)
+      // Step 2: Click Acknowledge Disclaimer - Using Playwright selector
       console.log("Step 2: Acknowledging disclaimer...");
-      await page.act("Click the 'Acknowledge Disclaimer to begin searching records' button");
+      await page.getByRole('link', { name: 'Acknowledge Disclaimer to' }).click();
       await page.waitForTimeout(3000);
 
-      // Step 3: Full System (Keep Stagehand - this works)
+      // Step 3: Click Full System - Using Playwright selector
       console.log("Step 3: Clicking Full System...");
-      await page.act("Click the 'Full System' link or button which is located to the left of 'Indexing and Imaging Combined Retrieval'");
+      await page.locator('span').filter({ hasText: /^Full System$/ }).getByRole('link').click();
       await page.waitForTimeout(3000);
 
-      // Step 4: Recorded Date (Keep Stagehand - this works)
-      console.log("Step 4: Selecting Recorded Date option...");
-      await page.act("Click or select the 'Recorded Date' button");
-      await page.waitForTimeout(3000);
-
-      // Step 5: Start Date - USE PLAYWRIGHT DIRECTLY
-      console.log("Step 5: Setting start date with Playwright...");
+      // Step 4: Fill Start Date - Using exact ID from codegen
+      console.log("Step 4: Setting start date...");
       const startDate = this.calculateStartDate();
       console.log(`Calculated start date: ${startDate}`);
       
-      // Wait for the date input to be visible
-      await page.waitForSelector('input[type="text"]', { timeout: 10000 });
-      
-      // Find the Start Date input using multiple possible selectors
-      const startDateInput = await page.$('input[placeholder*="mm/dd/yyyy"]') || 
-                            await page.$('input[name*="startDate"]') ||
-                            await page.$('input[name*="StartDate"]') ||
-                            await page.$('label:has-text("Start Date") + input') ||
-                            await page.$('xpath=//label[contains(text(), "Start Date")]/following-sibling::input[1]') ||
-                            await page.$('xpath=//input[@type="text"][1]'); // First text input as fallback
-      
-      if (startDateInput) {
-        await startDateInput.click();
-        await page.waitForTimeout(500);
-        
-        // Clear the field first
-        await startDateInput.click({ clickCount: 3 }); // Triple click to select all
-        await page.keyboard.press('Backspace');
-        
-        // Type the date
-        await startDateInput.type(startDate, { delay: 50 });
-        await page.waitForTimeout(500);
-        
-        // Tab out to close any calendar popup
-        await page.keyboard.press('Tab');
-        await page.waitForTimeout(1000);
-      } else {
-        console.log("Could not find Start Date input with Playwright, falling back to Stagehand...");
-        await page.act({
-          action: "Click on the text input box next to 'Start Date (mm/dd/yyyy)' and type %startDate%",
-          variables: { startDate: startDate }
-        });
-      }
+      const startDateField = page.locator('#TRG_98');
+      await startDateField.click();
+      await startDateField.press('ControlOrMeta+a'); // Select all
+      await startDateField.fill(startDate); // Use dynamic date
+      await startDateField.press('Tab');
+      await page.waitForTimeout(1000);
 
-      // Step 6: Record Type - USE PLAYWRIGHT DIRECTLY
-      console.log(`Step 6: Setting record type to ${this.config.recordType} with Playwright...`);
-      
-      // Find the instrument type input
-      const instrTypeInput = await page.$('input[placeholder*="INSTR"]') ||
-                            await page.$('label:has-text("Instr Type") + input') ||
-                            await page.$('xpath=//label[contains(text(), "Instr Type")]/following-sibling::input[1]') ||
-                            await page.$('xpath=//input[contains(@placeholder, "SEP by comma")]') ||
-                            await page.$('xpath=//td[contains(text(), "Instr Type")]/following-sibling::td/input');
-      
-      if (instrTypeInput) {
-        await instrTypeInput.click();
-        await instrTypeInput.click({ clickCount: 3 }); // Select all
-        await instrTypeInput.type(this.config.recordType, { delay: 50 });
-        await page.waitForTimeout(1000);
-      } else {
-        console.log("Could not find Instrument Type input with Playwright, falling back to Stagehand...");
-        await page.act({
-          action: "In the text field for 'Instr Type(s)', type %recordType%",
-          variables: { recordType: this.config.recordType }
-        });
-      }
+      // Step 5: Skip End Date (Tab through it as in codegen)
+      await page.locator('#TRG_99').press('Tab');
+      await page.waitForTimeout(500);
 
-      // Step 7: Search Button - USE PLAYWRIGHT DIRECTLY
-      console.log("Step 7: Clicking Search with Playwright...");
-      
-      // Multiple selectors for the search button
-      const searchButton = await page.$('button:has-text("Search")') ||
-                          await page.$('input[type="button"][value="Search"]') ||
-                          await page.$('input[type="submit"][value="Search"]') ||
-                          await page.$('xpath=//button[contains(text(), "Search")]') ||
-                          await page.$('xpath=//input[@value="Search"]');
-      
-      if (searchButton) {
-        await searchButton.click();
-      } else {
-        console.log("Could not find Search button with Playwright, falling back to Stagehand...");
-        await page.act("Click the 'Search' button");
-      }
+      // Step 6: Fill Instrument Type - Using exact ID from codegen
+      console.log(`Step 6: Setting record type to ${this.config.recordType}...`);
+      const instrTypeField = page.locator('#TRG_95');
+      await instrTypeField.click();
+      await instrTypeField.fill(this.config.recordType); // Use dynamic record type
+      await page.waitForTimeout(1500);
+
+      // Step 7: Click Search - Using Playwright selector
+      console.log("Step 7: Initiating search...");
+      await page.getByText('Search', { exact: true }).click();
       
       console.log("Waiting for search results to load...");
       await page.waitForTimeout(15000);
 
-      // Step 8: Select all checkbox - Try Playwright first
+      // Step 8: Select all records - Using exact ID from codegen
       console.log("Step 8: Selecting all records...");
-      
-      // Wait for results table
-      await page.waitForSelector('table', { timeout: 10000 }).catch(() => {
-        console.log("No table found, proceeding anyway...");
-      });
-      
-      // Try to find the header checkbox
-      const selectAllCheckbox = await page.$('th input[type="checkbox"]') ||
-                               await page.$('thead input[type="checkbox"]') ||
-                               await page.$('xpath=//th[text()="C"]/input[@type="checkbox"]') ||
-                               await page.$('xpath=//th[1]/input[@type="checkbox"]');
-      
-      if (selectAllCheckbox) {
-        await selectAllCheckbox.click();
-      } else {
-        console.log("Using Stagehand for checkbox...");
-        await page.act("Click the checkbox in the header row under column 'C' to select all records");
-      }
+      await page.locator('#TRG_171').getByRole('cell').click();
       
       console.log("Waiting for all records to be selected...");
       await page.waitForTimeout(20000);
 
-      // Step 9: Print Checked - Keep Stagehand
-      console.log("Step 9: Clicking Print Checked button...");
-      await page.act("Click the 'Print Checked' button");
+      // Step 9: Click Print Checked and handle popup
+      console.log("Step 9: Clicking Print Checked and handling popup...");
       
-      // Step 10: Handle new tab
-      console.log("Step 10: Waiting for print preview tab to open...");
-      await page.waitForTimeout(5000);
+      // Set up promise to catch the popup BEFORE clicking
+      const popupPromise = page.waitForEvent('popup');
       
-      const pages = this.stagehand.context.pages();
-      console.log(`Found ${pages.length} tabs`);
+      // Click Print Checked
+      await page.getByText('Print Checked', { exact: true }).click();
       
-      let printPage: Page;
-      if (pages.length > 1) {
-        printPage = pages[pages.length - 1] as Page;
-        console.log("Switched to print preview tab");
-      } else {
-        printPage = page;
-      }
+      // Wait for the popup to appear
+      const printPage = await popupPromise as Page;
+      console.log("Print preview popup opened");
+      await printPage.waitForLoadState('networkidle');
 
-      // Step 11: Download
-      console.log("Step 11: Attempting to download document...");
+      // Step 10: Download from the popup
+      console.log("Step 10: Attempting to download document...");
       
+      // Set up download handling on the popup page
       const downloadPromise = printPage.waitForEvent('download', { timeout: 60000 });
       
+      // Try to trigger download on the popup
       try {
-        await printPage.act("Click the download button or save button");
+        // Try clicking print/download button if visible
+        const downloadButton = printPage.locator('button:has-text("Download")') ||
+                              printPage.locator('button:has-text("Save")') ||
+                              printPage.locator('button:has-text("Print")');
+        
+        if (await downloadButton.isVisible({ timeout: 5000 })) {
+          await downloadButton.click();
+        } else {
+          // Fallback to keyboard shortcut
+          await printPage.keyboard.press('Control+s');
+        }
       } catch (error) {
-        console.log("Trying keyboard shortcut...");
+        console.log("Using keyboard shortcut for download...");
         await printPage.keyboard.press('Control+s');
       }
       
+      // Wait for download to complete
       const download = await downloadPromise;
       const fileName = download.suggestedFilename() || `chatham-rod-${Date.now()}.pdf`;
       console.log(`Download started: ${fileName}`);
       
-      const buffer = await download.createReadStream().then(stream => {
-        const chunks: Buffer[] = [];
-        return new Promise<Buffer>((resolve, reject) => {
-          stream.on('data', chunk => chunks.push(chunk));
-          stream.on('end', () => resolve(Buffer.concat(chunks)));
-          stream.on('error', reject);
-        });
+      // Convert download stream to buffer for S3
+      const stream = await download.createReadStream();
+      const chunks: Buffer[] = [];
+      const buffer = await new Promise<Buffer>((resolve, reject) => {
+        stream.on('data', (chunk) => chunks.push(chunk));
+        stream.on('end', () => resolve(Buffer.concat(chunks)));
+        stream.on('error', reject);
       });
 
       console.log(`Download completed: ${buffer.length} bytes`);
 
-      // Step 12: Upload to S3
-      console.log("Step 12: Uploading to S3...");
+      // Step 11: Upload to S3
+      console.log("Step 11: Uploading to S3...");
       const s3Path = await this.s3Uploader.uploadFile(buffer, fileName);
       console.log(`File uploaded successfully to: ${s3Path}`);
 
+      // Clean up
       await this.stagehand.close();
       
       return {
@@ -253,6 +191,7 @@ export class ChathamRODScraper {
     } catch (error) {
       console.error("Scraping failed:", error);
       
+      // Try to close stagehand on error
       try {
         await this.stagehand.close();
       } catch (closeError) {
