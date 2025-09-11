@@ -28,9 +28,8 @@ export class ChathamRODScraper {
       modelClientOptions: {
         apiKey: process.env.DEEPSEEK_API_KEY!,
         baseURL: "https://api.deepseek.com/v1",
-        // Increase token limits for better understanding
         maxTokens: 4096,
-        temperature: 0.1, // Lower temperature for more consistent results
+        temperature: 0.1,
       },
       browserbaseSessionCreateParams: {
         projectId: process.env.BROWSERBASE_PROJECT_ID!,
@@ -41,7 +40,7 @@ export class ChathamRODScraper {
         },
         timeout: 300,
       },
-      verbose: 2, // Increase verbosity for better debugging
+      verbose: 2,
       domSettleTimeoutMs: 45000,
     });
 
@@ -87,88 +86,52 @@ export class ChathamRODScraper {
 
       // Step 4: Select Recorded Date
       console.log("Step 4: Selecting Recorded Date option...");
-      await page.act("Click or select the 'Recorded Date'button");
-      await page.waitForTimeout(3000); // Give more time for form to update
+      await page.act("Click or select the 'Recorded Date' button");
+      await page.waitForTimeout(3000);
 
-      // Step 5: IMPROVED - Find and fill Start Date using observe first
-      console.log("Step 5: Finding and setting start date...");
+      // Step 5: SIMPLIFIED - Click and fill Start Date text box directly
+      console.log("Step 5: Setting start date...");
       const startDate = this.calculateStartDate();
       console.log(`Calculated start date: ${startDate}`);
       
-      // Use observe to find the Start Date field
-      console.log("Observing page to find date input fields...");
-      const dateFields = await page.observe("Find all date input fields on the page, specifically looking for 'Start Date' and 'End Date' input boxes in the search form");
+      // Use observe to find the Start Date text box
+      const startDateFields = await page.observe("Find the text input box that is to the right of the text 'Start Date (mm/dd/yyyy) *' on the page");
       
-      if (dateFields.length > 0) {
-        console.log(`Found ${dateFields.length} date fields:`, dateFields.map(f => f.description));
+      if (startDateFields.length > 0) {
+        console.log("Found Start Date field:", startDateFields[0].description);
         
-        // Find the Start Date field specifically
-        const startDateField = dateFields.find(field => 
-          field.description.toLowerCase().includes('start') || 
-          field.description.toLowerCase().includes('begin') ||
-          field.description.toLowerCase().includes('from')
-        ) || dateFields[0]; // Fallback to first field
+        // Click the text box
+        await page.act(startDateFields[0]);
+        await page.waitForTimeout(1000);
         
-        if (startDateField) {
-          console.log("Found Start Date field:", startDateField.description);
-          
-          // Click the field using the observed element
-          await page.act(startDateField);
-          await page.waitForTimeout(2000);
-          
-          // Now handle the calendar popup
-          console.log("Step 6: Setting date in calendar...");
-          
-          // Try to click today's date first
-          const todayDay = new Date().getDate().toString();
-          try {
-            await page.act({
-              action: "In the calendar popup that appeared, click on the number %todayDay% which represents today's date",
-              variables: { todayDay: todayDay }
-            });
-            await page.waitForTimeout(1500);
-          } catch (error) {
-            console.log("Could not click calendar date, trying direct input...");
-          }
-          
-          // Click the field again to select all text
-          await page.act({
-            action: "Click on the date input field that currently has focus to select all the text in it"
-          });
-          await page.waitForTimeout(500);
-          
-          // Clear and type the date
-          await page.act({
-            action: "Clear the field completely using Ctrl+A (or Command+A on Mac) and then Delete key, then type %startDate% in MM/DD/YYYY format exactly as shown",
-            variables: { startDate: startDate }
-          });
-          await page.waitForTimeout(1500);
-          
-          // Press Tab or Enter to confirm
-          await page.act("Press the Tab key or click elsewhere on the page to confirm the date entry and close any calendar popup");
-          await page.waitForTimeout(1000);
-        }
-      } else {
-        // Fallback to direct approach if observe fails
-        console.log("Could not find date fields with observe, trying direct approach...");
-        
+        // Type the date directly
         await page.act({
-          action: "Find and click on the input field labeled 'Start Date' or the first date input field in the search form, it should be in the Optional Restrictions section below the 'Recorded Date' option you just selected",
-        });
-        await page.waitForTimeout(2000);
-        
-        // Type the date
-        await page.act({
-          action: "Select all text in the current field with Ctrl+A (or Command+A) and type %startDate% in MM/DD/YYYY format",
+          action: "Type %startDate% in the text box",
           variables: { startDate: startDate }
         });
-        await page.waitForTimeout(1500);
+        await page.waitForTimeout(1000);
+        
+      } else {
+        // Fallback approach with specific wording
+        console.log("Using fallback approach for Start Date...");
+        
+        await page.act("Click on the text input box that is immediately to the right of the label 'Start Date (mm/dd/yyyy) *'");
+        await page.waitForTimeout(1000);
+        
+        await page.act({
+          action: "Type %startDate% in MM/DD/YYYY format",
+          variables: { startDate: startDate }
+        });
+        await page.waitForTimeout(1000);
       }
-
-      // Step 7: Set Record Type
-      console.log(`Step 7: Setting record type to ${this.config.recordType}...`);
       
-      // Use observe to find the instrument type field
+      // Click elsewhere to close any popups
+      await page.act("Click somewhere else on the page outside the date field");
+      await page.waitForTimeout(1000);
+
+      // Step 6: Set Record Type
+      console.log(`Step 6: Setting record type to ${this.config.recordType}...`);
+      
       const typeFields = await page.observe("Find the text input field for 'INSTR type(S)' or 'Instrument Type' which should have text '(SEP by comma)' near it");
       
       if (typeFields.length > 0) {
@@ -180,7 +143,6 @@ export class ChathamRODScraper {
           variables: { recordType: this.config.recordType }
         });
       } else {
-        // Fallback approach
         await page.act({
           action: "In the text input field that is labeled 'Instr Type(s)' or next to text that says 'INSTR type(S) (SEP by comma)', clear any existing text and type %recordType%",
           variables: { recordType: this.config.recordType }
@@ -188,10 +150,9 @@ export class ChathamRODScraper {
       }
       await page.waitForTimeout(1500);
 
-      // Step 8: Click Search
-      console.log("Step 8: Initiating search...");
+      // Step 7: Click Search
+      console.log("Step 7: Initiating search...");
       
-      // Use observe to find the Search button
       const searchButtons = await page.observe("Find the 'Search' button on the page, it should be in the top portion of the page");
       
       if (searchButtons.length > 0) {
@@ -201,29 +162,26 @@ export class ChathamRODScraper {
         await page.act("Click the 'Search' button which should be in the upper left area of the page");
       }
       
-      // Wait for search results to load
       console.log("Waiting for search results to load...");
       await page.waitForTimeout(15000);
 
-      // Step 9: Select all records
-      console.log("Step 9: Selecting all records...");
+      // Step 8: Select all records
+      console.log("Step 8: Selecting all records...");
       
-      // Use observe to find the select-all checkbox
       const checkboxes = await page.observe("Find the checkbox in the header row of the results table, specifically the checkbox under the column labeled 'C' that will select all records when clicked");
       
       if (checkboxes.length > 0) {
         console.log("Found select-all checkbox:", checkboxes[0].description);
         await page.act(checkboxes[0]);
       } else {
-        // Fallback with very specific instruction
         await page.act("In the results table that appeared, click the checkbox in the header row (the top row) under the column with header 'C'. This checkbox will select all records in the table when clicked.");
       }
       
       console.log("Waiting for all records to be selected...");
       await page.waitForTimeout(20000);
 
-      // Step 10: Click Print Checked
-      console.log("Step 10: Clicking Print Checked button...");
+      // Step 9: Click Print Checked
+      console.log("Step 9: Clicking Print Checked button...");
       
       const printButtons = await page.observe("Find the 'Print Checked' button on the page");
       
@@ -233,8 +191,8 @@ export class ChathamRODScraper {
         await page.act("Click the 'Print Checked' button which should be located above or near the results table");
       }
       
-      // Step 11: Handle new tab
-      console.log("Step 11: Waiting for print preview tab to open...");
+      // Step 10: Handle new tab
+      console.log("Step 10: Waiting for print preview tab to open...");
       await page.waitForTimeout(5000);
       
       const pages = this.stagehand.context.pages();
@@ -249,8 +207,8 @@ export class ChathamRODScraper {
         console.log("Using same tab for print preview");
       }
 
-      // Step 12: Download the document
-      console.log("Step 12: Attempting to download document...");
+      // Step 11: Download the document
+      console.log("Step 11: Attempting to download document...");
       
       const downloadPromise = printPage.waitForEvent('download', { timeout: 60000 });
       
@@ -276,8 +234,8 @@ export class ChathamRODScraper {
 
       console.log(`Download completed: ${buffer.length} bytes`);
 
-      // Step 13: Upload to S3
-      console.log("Step 13: Uploading to S3...");
+      // Step 12: Upload to S3
+      console.log("Step 12: Uploading to S3...");
       const s3Path = await this.s3Uploader.uploadFile(buffer, fileName);
       console.log(`File uploaded successfully to: ${s3Path}`);
 
