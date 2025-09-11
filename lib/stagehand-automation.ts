@@ -143,17 +143,34 @@ export class ChathamRODScraper {
       console.log("Waiting for search results to load...");
       await page.waitForTimeout(15000); // Give search time to complete
 
-      // Step 9: Select all records via topmost checkbox
+      // Step 9: Select all records via the header checkbox - IMPROVED
       console.log("Step 9: Selecting all records (this may take a while due to buggy interface)...");
-      await page.act("Click the topmost checkbox in the topmost left corner of the results table to select all records");
+      
+      // More specific instruction for the checkbox
+      await page.act("In the search results table, click the checkbox in the header row under the column labeled 'C' to select all records. This is the topmost checkbox in the leftmost column of the results table.");
+      
+      // Alternative approach if the first one fails
+      try {
+        // Wait to see if checkboxes are being selected
+        await page.waitForTimeout(5000);
+        
+        // Use observe to verify if we need to try again
+        const checkboxes = await page.observe("Find the select-all checkbox or the checkbox in the header row of the results table");
+        if (checkboxes.length > 0 && checkboxes[0].description.toLowerCase().includes('header')) {
+          console.log("Retrying checkbox selection...");
+          await page.act(checkboxes[0]);
+        }
+      } catch (error) {
+        console.log("Checkbox verification skipped, proceeding...");
+      }
       
       // Wait for all checkboxes to be selected (this is buggy and slow as mentioned)
       console.log("Waiting for all records to be selected (buggy interface, please be patient)...");
       await page.waitForTimeout(20000); // Give plenty of time for selection
 
-      // Step 10: Click Print Checked
+      // Step 10: Click Print Checked - IMPROVED
       console.log("Step 10: Clicking Print Checked button...");
-      await page.act("Click the 'Print Checked' button");
+      await page.act("Click the 'Print Checked' button which should be located near the top of the page, possibly in a button row above the results table");
       
       // Step 11: Handle new tab
       console.log("Step 11: Waiting for print preview tab to open...");
