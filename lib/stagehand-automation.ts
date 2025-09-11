@@ -1,5 +1,5 @@
 import { Stagehand, Page } from "@browserbasehq/stagehand";
-import { S3Uploader } from "./s3-upload.js";  // ADD .js HERE
+import { S3Uploader } from "./s3-upload.js";
 
 export interface ScrapeConfig {
   daysBack: number;
@@ -18,7 +18,7 @@ export class ChathamRODScraper {
       recordType: config.recordType || "DEED"
     };
     
-    // Using DeepSeek for cost efficiency
+    // Using DeepSeek for cost efficiency but with better prompting
     this.stagehand = new Stagehand({
       env: "BROWSERBASE",
       apiKey: process.env.BROWSERBASE_API_KEY!,
@@ -28,17 +28,20 @@ export class ChathamRODScraper {
       modelClientOptions: {
         apiKey: process.env.DEEPSEEK_API_KEY!,
         baseURL: "https://api.deepseek.com/v1",
+        // Increase token limits for better understanding
+        maxTokens: 4096,
+        temperature: 0.1, // Lower temperature for more consistent results
       },
       browserbaseSessionCreateParams: {
-  projectId: process.env.BROWSERBASE_PROJECT_ID!,
-  region: "us-west-2",
-  browserSettings: {
-    viewport: { width: 1920, height: 1080 },
-    blockAds: true,
-  },
-  timeout: 300, // 5 minutes (300 seconds)
-},
-      verbose: 1,
+        projectId: process.env.BROWSERBASE_PROJECT_ID!,
+        region: "us-west-2",
+        browserSettings: {
+          viewport: { width: 1920, height: 1080 },
+          blockAds: true,
+        },
+        timeout: 300,
+      },
+      verbose: 2, // Increase verbosity for better debugging
       domSettleTimeoutMs: 45000,
     });
 
@@ -74,115 +77,171 @@ export class ChathamRODScraper {
 
       // Step 2: Click Acknowledge Disclaimer
       console.log("Step 2: Acknowledging disclaimer...");
-      await page.act("Click the 'Acknowledge Disclaimer to begin searching records' button");
+      await page.act("Click the 'Acknowledge Disclaimer to begin searching records' button which should be a large button in the center of the page");
       await page.waitForTimeout(3000);
 
       // Step 3: Click Full System
       console.log("Step 3: Clicking Full System...");
-      await page.act("Click 'Full System' which is to the left of 'Indexing and Imaging Combined Retrieval'");
+      await page.act("Click the 'Full System' link or button which is located to the left of the text 'Indexing and Imaging Combined Retrieval' on the page");
       await page.waitForTimeout(3000);
 
       // Step 4: Select Recorded Date
       console.log("Step 4: Selecting Recorded Date option...");
-      await page.act("Select or click the 'Recorded Date' option");
-      await page.waitForTimeout(2000);
+      await page.act("Click or select the 'Recorded Date'button");
+      await page.waitForTimeout(3000); // Give more time for form to update
 
-      // Step 5: Handle Start Date field with retry logic
-      console.log("Step 5: Setting start date...");
+      // Step 5: IMPROVED - Find and fill Start Date using observe first
+      console.log("Step 5: Finding and setting start date...");
       const startDate = this.calculateStartDate();
       console.log(`Calculated start date: ${startDate}`);
       
-      // Try clicking the Start Date field with retry
-      try {
-        await page.act("Click the Start Date input field or box");
-        await page.waitForTimeout(1000);
-      } catch (error) {
-        // If error, click out and back in as instructed
-        console.log("Retrying Start Date field click...");
-        await page.act("Click somewhere else on the page outside the date field");
-        await page.waitForTimeout(500);
-        await page.act("Click the Start Date input field or box again");
-        await page.waitForTimeout(1000);
+      // Use observe to find the Start Date field
+      console.log("Observing page to find date input fields...");
+      const dateFields = await page.observe("Find all date input fields on the page, specifically looking for 'Start Date' and 'End Date' input boxes in the search form");
+      
+      if (dateFields.length > 0) {
+        console.log(`Found ${dateFields.length} date fields:`, dateFields.map(f => f.description));
+        
+        // Find the Start Date field specifically
+        const startDateField = dateFields.find(field => 
+          field.description.toLowerCase().includes('start') || 
+          field.description.toLowerCase().includes('begin') ||
+          field.description.toLowerCase().includes('from')
+        ) || dateFields[0]; // Fallback to first field
+        
+        if (startDateField) {
+          console.log("Found Start Date field:", startDateField.description);
+          
+          // Click the field using the observed element
+          await page.act(startDateField);
+          await page.waitForTimeout(2000);
+          
+          // Now handle the calendar popup
+          console.log("Step 6: Setting date in calendar...");
+          
+          // Try to click today's date first
+          const todayDay = new Date().getDate().toString();
+          try {
+            await page.act({
+              action: "In the calendar popup that appeared, click on the number %todayDay% which represents today's date",
+              variables: { todayDay: todayDay }
+            });
+            await page.waitForTimeout(1500);
+          } catch (error) {
+            console.log("Could not click calendar date, trying direct input...");
+          }
+          
+          // Click the field again to select all text
+          await page.act({
+            action: "Click on the date input field that currently has focus to select all the text in it"
+          });
+          await page.waitForTimeout(500);
+          
+          // Clear and type the date
+          await page.act({
+            action: "Clear the field completely using Ctrl+A (or Command+A on Mac) and then Delete key, then type %startDate% in MM/DD/YYYY format exactly as shown",
+            variables: { startDate: startDate }
+          });
+          await page.waitForTimeout(1500);
+          
+          // Press Tab or Enter to confirm
+          await page.act("Press the Tab key or click elsewhere on the page to confirm the date entry and close any calendar popup");
+          await page.waitForTimeout(1000);
+        }
+      } else {
+        // Fallback to direct approach if observe fails
+        console.log("Could not find date fields with observe, trying direct approach...");
+        
+        await page.act({
+          action: "Find and click on the input field labeled 'Start Date' or the first date input field in the search form, it should be in the Optional Restrictions section below the 'Recorded Date' option you just selected",
+        });
+        await page.waitForTimeout(2000);
+        
+        // Type the date
+        await page.act({
+          action: "Select all text in the current field with Ctrl+A (or Command+A) and type %startDate% in MM/DD/YYYY format",
+          variables: { startDate: startDate }
+        });
+        await page.waitForTimeout(1500);
       }
 
-      // Step 6: Navigate calendar and set date - IMPROVED METHOD
-      console.log("Step 6: Navigating calendar and setting date...");
-      
-      // First click today's date in the calendar to populate the field
-      const todayDay = new Date().getDate().toString();
-      await page.act({
-        action: "In the calendar popup, click on the date number %todayDay% which represents today's date",
-        variables: { todayDay: todayDay }
-      });
-      await page.waitForTimeout(1500);
-      
-      // Now clear the field and type the calculated start date
-      await page.act("Click on the Start Date input field to select all text");
-  await page.waitForTimeout(500);
-      
-      // Enter the date using variables
-      await page.act({
-        action: "Select all text with Ctrl+A or Command+A and type %startDate% in MM/DD/YYYY format",
-        variables: { startDate: startDate }
-      });
-      await page.waitForTimeout(1500);
-
-      // Step 7: Set Record Type (BEFORE searching)
+      // Step 7: Set Record Type
       console.log(`Step 7: Setting record type to ${this.config.recordType}...`);
-      await page.act({
-        action: "In the text box to the left of 'INSTR type(S) (SEP by comma)', clear any existing text and type %recordType%",
-        variables: { recordType: this.config.recordType }
-      });
+      
+      // Use observe to find the instrument type field
+      const typeFields = await page.observe("Find the text input field for 'INSTR type(S)' or 'Instrument Type' which should have text '(SEP by comma)' near it");
+      
+      if (typeFields.length > 0) {
+        await page.act(typeFields[0]);
+        await page.waitForTimeout(500);
+        
+        await page.act({
+          action: "Clear any existing text in this field and type %recordType%",
+          variables: { recordType: this.config.recordType }
+        });
+      } else {
+        // Fallback approach
+        await page.act({
+          action: "In the text input field that is labeled 'Instr Type(s)' or next to text that says 'INSTR type(S) (SEP by comma)', clear any existing text and type %recordType%",
+          variables: { recordType: this.config.recordType }
+        });
+      }
       await page.waitForTimeout(1500);
 
       // Step 8: Click Search
       console.log("Step 8: Initiating search...");
-      await page.act("Click the 'Search' button in the top left corner");
+      
+      // Use observe to find the Search button
+      const searchButtons = await page.observe("Find the 'Search' button on the page, it should be in the top portion of the page");
+      
+      if (searchButtons.length > 0) {
+        console.log("Found Search button:", searchButtons[0].description);
+        await page.act(searchButtons[0]);
+      } else {
+        await page.act("Click the 'Search' button which should be in the upper left area of the page");
+      }
       
       // Wait for search results to load
       console.log("Waiting for search results to load...");
-      await page.waitForTimeout(15000); // Give search time to complete
+      await page.waitForTimeout(15000);
 
-      // Step 9: Select all records via the header checkbox - IMPROVED
-      console.log("Step 9: Selecting all records (this may take a while due to buggy interface)...");
+      // Step 9: Select all records
+      console.log("Step 9: Selecting all records...");
       
-      // More specific instruction for the checkbox
-      await page.act("In the search results table, click the checkbox in the header row under the column labeled 'C' to select all records. This is the topmost checkbox in the leftmost column of the results table.");
+      // Use observe to find the select-all checkbox
+      const checkboxes = await page.observe("Find the checkbox in the header row of the results table, specifically the checkbox under the column labeled 'C' that will select all records when clicked");
       
-      // Alternative approach if the first one fails
-      try {
-        // Wait to see if checkboxes are being selected
-        await page.waitForTimeout(5000);
-        
-        // Use observe to verify if we need to try again
-        const checkboxes = await page.observe("Find the select-all checkbox or the checkbox in the header row of the results table");
-        if (checkboxes.length > 0 && checkboxes[0].description.toLowerCase().includes('header')) {
-          console.log("Retrying checkbox selection...");
-          await page.act(checkboxes[0]);
-        }
-      } catch (error) {
-        console.log("Checkbox verification skipped, proceeding...");
+      if (checkboxes.length > 0) {
+        console.log("Found select-all checkbox:", checkboxes[0].description);
+        await page.act(checkboxes[0]);
+      } else {
+        // Fallback with very specific instruction
+        await page.act("In the results table that appeared, click the checkbox in the header row (the top row) under the column with header 'C'. This checkbox will select all records in the table when clicked.");
       }
       
-      // Wait for all checkboxes to be selected (this is buggy and slow as mentioned)
-      console.log("Waiting for all records to be selected (buggy interface, please be patient)...");
-      await page.waitForTimeout(20000); // Give plenty of time for selection
+      console.log("Waiting for all records to be selected...");
+      await page.waitForTimeout(20000);
 
-      // Step 10: Click Print Checked - IMPROVED
+      // Step 10: Click Print Checked
       console.log("Step 10: Clicking Print Checked button...");
-      await page.act("Click the 'Print Checked' button which should be located near the top of the page, possibly in a button row above the results table");
+      
+      const printButtons = await page.observe("Find the 'Print Checked' button on the page");
+      
+      if (printButtons.length > 0) {
+        await page.act(printButtons[0]);
+      } else {
+        await page.act("Click the 'Print Checked' button which should be located above or near the results table");
+      }
       
       // Step 11: Handle new tab
       console.log("Step 11: Waiting for print preview tab to open...");
       await page.waitForTimeout(5000);
       
-      // Get all pages/tabs using Stagehand context
       const pages = this.stagehand.context.pages();
       console.log(`Found ${pages.length} tabs`);
       
       let printPage: Page;
       if (pages.length > 1) {
-        // Switch to the new tab (usually the last one)
         printPage = pages[pages.length - 1] as Page;
         console.log("Switched to print preview tab");
       } else {
@@ -193,23 +252,19 @@ export class ChathamRODScraper {
       // Step 12: Download the document
       console.log("Step 12: Attempting to download document...");
       
-      // Set up download handling
-      const downloadPromise = printPage.waitForEvent('download', { timeout: 30000 });
+      const downloadPromise = printPage.waitForEvent('download', { timeout: 60000 });
       
-      // Try multiple approaches to trigger download
       try {
-        await printPage.act("Click the download button, save button, or print button in the print preview");
+        await printPage.act("Click the download button, save button, or print button in the print preview window");
       } catch (error) {
-        console.log("First download attempt failed, trying alternative...");
-        await printPage.act("Press Ctrl+S or Command+S to save the document");
+        console.log("First download attempt failed, trying keyboard shortcut...");
+        await printPage.act("Press Ctrl+S (or Command+S on Mac) to save the document");
       }
       
-      // Wait for download
       const download = await downloadPromise;
       const fileName = download.suggestedFilename() || `chatham-rod-${Date.now()}.pdf`;
       console.log(`Download started: ${fileName}`);
       
-      // Convert download to buffer
       const buffer = await download.createReadStream().then(stream => {
         const chunks: Buffer[] = [];
         return new Promise<Buffer>((resolve, reject) => {
@@ -226,7 +281,6 @@ export class ChathamRODScraper {
       const s3Path = await this.s3Uploader.uploadFile(buffer, fileName);
       console.log(`File uploaded successfully to: ${s3Path}`);
 
-      // Clean up
       await this.stagehand.close();
       
       return {
@@ -237,7 +291,6 @@ export class ChathamRODScraper {
     } catch (error) {
       console.error("Scraping failed:", error);
       
-      // Try to close stagehand on error
       try {
         await this.stagehand.close();
       } catch (closeError) {
