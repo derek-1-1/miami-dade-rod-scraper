@@ -105,16 +105,24 @@ export class ChathamRODScraper {
         await page.waitForTimeout(1000);
       }
 
-      // Step 6: Navigate calendar and set date
+      // Step 6: Navigate calendar and set date - IMPROVED METHOD
       console.log("Step 6: Navigating calendar and setting date...");
       
-      // Click the left arrow to go back one month
-      await page.act("Click the left arrow in the top left corner of the calendar popup to go back one month");
-      await page.waitForTimeout(1000);
+      // First click today's date in the calendar to populate the field
+      const todayDay = new Date().getDate().toString();
+      await page.act({
+        action: "In the calendar popup, click on the date number %todayDay% which represents today's date",
+        variables: { todayDay: todayDay }
+      });
+      await page.waitForTimeout(1500);
+      
+      // Now clear the field and type the calculated start date
+      await page.act("Click on the Start Date input field to select all text");
+  await page.waitForTimeout(500);
       
       // Enter the date using variables
       await page.act({
-        action: "Type or enter the date %startDate% in the date field in MM/DD/YYYY format",
+        action: "Select all text with Ctrl+A or Command+A and type %startDate% in MM/DD/YYYY format",
         variables: { startDate: startDate }
       });
       await page.waitForTimeout(1500);
