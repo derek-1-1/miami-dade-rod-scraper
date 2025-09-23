@@ -27,8 +27,8 @@ export class MiamiDadeRODScraper {
       modelClientOptions: {
         apiKey: process.env.DEEPSEEK_API_KEY!,
         baseURL: "https://api.deepseek.com/v1",
-        maxTokens: 4096,
-        temperature: 0.1,
+        // maxTokens: 4096,
+        // temperature: 0.1,
       },
       browserbaseSessionCreateParams: {
         projectId: process.env.BROWSERBASE_PROJECT_ID!,
