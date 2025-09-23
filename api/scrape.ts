@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { ChathamRODScraper, ScrapeConfig } from "../lib/stagehand-automation.js";  // ADD .js HERE
+import { MiamiDadeRODScraper, ScrapeConfig } from "../lib/stagehand-automation.js";
 import { z } from "zod";
 
 // REST OF YOUR CODE STAYS EXACTLY THE SAME - NO OTHER CHANGES
@@ -27,7 +27,7 @@ export default async function handler(
     console.log(`Starting scrape with config:`, config);
 
     // Create and run scraper
-    const scraper = new ChathamRODScraper(config as ScrapeConfig);
+    const scraper = new MiamiDadeRODScraper(config as ScrapeConfig);
     const result = await scraper.execute();
 
     if (result.success) {
